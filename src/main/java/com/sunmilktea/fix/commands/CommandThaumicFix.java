@@ -46,7 +46,7 @@ public class CommandThaumicFix extends CommandBase {
 
     @Override
     public void processCommand(ICommandSender sender, String[] args) {
-        if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
+        if (args.length == 0 || "help".equalsIgnoreCase(args[0])) {
             displayHelp(sender);
             return;
         }
