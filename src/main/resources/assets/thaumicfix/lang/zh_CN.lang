@@ -1,0 +1,5 @@
+# ThaumicFix 命令反馈
+thaumicfix.command.scan.start=§a[ThaumicFix] §e开始配方扫描... 详情请查看服务器控制台及日志文件。
+thaumicfix.command.scan.complete.ok=§a[ThaumicFix] §a扫描完成，未发现任何明显损坏的配方。
+thaumicfix.command.scan.complete.fail=§a[ThaumicFix] §c扫描完成，发现 %s 个可能损坏的配方。详情请查看日志文件。
+thaumicfix.command.error.write.log=§a[ThaumicFix] §c写入日志文件时发生错误！

@@ -1,0 +1,5 @@
+# ThaumicFix Command Feedback
+thaumicfix.command.scan.start=§a[ThaumicFix] §eStarting recipe scan... Please check the server console and log file for details.
+thaumicfix.command.scan.complete.ok=§a[ThaumicFix] §aScan complete. No obviously broken recipes were found.
+thaumicfix.command.scan.complete.fail=§a[ThaumicFix] §cScan complete. Found %s potentially broken recipes. Please check the log file for details.
+thaumicfix.command.error.write.log=§a[ThaumicFix] §cAn error occurred while writing to the log file!
