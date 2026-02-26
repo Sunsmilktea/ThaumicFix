@@ -3,10 +3,12 @@
   "minVersion": "0.7.11",
   "package": "com.sunmilktea.fix.mixins",
   "refmap": "thaumicfix.refmap.json",
+  "plugin": "com.sunmilktea.fix.mixins.MixinConfigPlugin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "MixinEntityPech",
-    "MixinThaumcraftCraftingManager"
+    "MixinThaumcraftCraftingManager",
+    "MixinItemCellMicroscope"
   ],
   "priority": 1500
 }

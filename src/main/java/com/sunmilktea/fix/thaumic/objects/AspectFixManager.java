@@ -27,7 +27,7 @@ import thaumcraft.api.aspects.AspectList;
 
 public class AspectFixManager {
 
-    private static final Logger LOGGER = LogManager.getLogger("ThaumicFix AspectFixManager");
+    private static final Logger LOGGER = LogManager.getLogger("ThaumicFix");
     private static final Gson GSON = new Gson();
     private static final File CONFIG_FILE = new File("config/ThaumicFixAspects.json");
 

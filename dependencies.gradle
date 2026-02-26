@@ -19,6 +19,9 @@ dependencies {
     //compileOnly("com.github.GTNewHorizons:TinkersConstruct:1.14.17-GTNH:dev") { transitive = false }
     //compileOnly("com.github.GTNewHorizons:WitcheryExtras:1.4.7:dev") { transitive = false }
     compileOnly("thaumcraft:Thaumcraft:1.7.10-4.2.3.5:dev")
+    api(files('libs/thaumicenergistics-1.7.31-GTNH-dev.jar'))
+    api(files('libs/appliedenergistics2-rv3-beta-846-GTNH-dev.jar'))
+    api(files('libs/NotEnoughItems-2.8.71-GTNH-dev.jar'))
     //compileOnly rfg.deobf("curse.maven:witchery-69673:2234410")
     //compileOnly("com.github.GTNewHorizons:Chisel:2.17.11-GTNH:dev") { transitive = false }
     //compileOnly("com.github.GTNewHorizons:Botania:1.13.8-GTNH:dev") { transitive = false }

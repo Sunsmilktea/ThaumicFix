@@ -4,6 +4,9 @@ import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.FileAppender;
+import org.apache.logging.log4j.core.layout.PatternLayout;
 
 import com.sunmilktea.fix.commands.CommandThaumicFix;
 import com.sunmilktea.fix.thaumic.objects.AspectFixManager;
@@ -12,20 +15,76 @@ import cpw.mods.fml.common.Mod;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLLoadCompleteEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
+import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import thaumcraft.api.ThaumcraftApi;
 import thaumcraft.api.crafting.InfusionRecipe;
 
-@Mod(
-    modid = "thaumicfix",
-    name = "ThaumicFix",
-    version = "1.3",
-    dependencies = "required-after:Thaumcraft@[4.2.3.5,);after:tc4tweaks",
-    acceptableRemoteVersions = "*")
+@Mod(modid = "thaumicfix", name = "ThaumicFix", version = "1.3", useMetadata = true)
 public class ThaumicFix {
 
     public static final Logger LOGGER = LogManager.getLogger("ThaumicFix");
     public static boolean isLoadFinished = false;
+
+    @Mod.EventHandler
+    public void preInit(FMLPreInitializationEvent event) {
+        setupLogger();
+        Config.synchronizeConfiguration(event.getSuggestedConfigurationFile());
+        LOGGER.info("Configuration loaded.");
+    }
+
+    private void setupLogger() {
+        try {
+            // 直接获取Logger实例，这是一个更安全的操作
+            org.apache.logging.log4j.core.Logger logger = (org.apache.logging.log4j.core.Logger) LogManager
+                .getLogger("ThaumicFix");
+            if (logger == null) {
+                System.err
+                    .println("[ThaumicFix] FATAL: Could not get Logger instance. Logging to file will be disabled.");
+                return;
+            }
+
+            // 创建一个最简单的PatternLayout，这几乎不可能失败
+            final PatternLayout layout = PatternLayout
+                .createLayout("%d{HH:mm:ss.SSS} [%t/%level] [%c{1}]: %msg%n", null, null, null, null);
+
+            // 创建FileAppender，同样使用更简单、兼容性更强的参数
+            final FileAppender appender = FileAppender.createAppender(
+                "logs/thaumicfix.log",
+                "false",
+                "false",
+                "File",
+                "true",
+                "false",
+                "false",
+                layout,
+                null,
+                "false",
+                null,
+                null);
+
+            if (appender != null) {
+                appender.start();
+                // 直接将Appender添加到Logger实例上
+                logger.addAppender(appender);
+                // 阻止日志冒泡到root logger，避免在latest.log中重复
+                logger.setAdditive(false);
+
+                final LoggerContext ctx = (LoggerContext) LogManager.getContext(false);
+                ctx.updateLoggers();
+
+                LOGGER.info(
+                    "ThaumicFix logger initialized. All subsequent logs for this mod will be in logs/thaumicfix.log");
+            } else {
+                System.err
+                    .println("[ThaumicFix] FATAL: Could not create FileAppender. Logging to file will be disabled.");
+            }
+        } catch (Throwable t) {
+            System.err.println(
+                "[ThaumicFix] FATAL: An unexpected error occurred while setting up the logger. Logging to file will be disabled.");
+            t.printStackTrace();
+        }
+    }
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {

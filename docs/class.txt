@@ -1,0 +1,834 @@
+//
+// Source code recreated from a .class file by IntelliJ IDEA
+// (powered by Fernflower decompiler)
+//
+
+package codechicken.nei.guihook;
+
+import codechicken.lib.gui.GuiDraw;
+import codechicken.nei.ItemList;
+import codechicken.nei.ItemStackSet;
+import codechicken.nei.NEIClientConfig;
+import codechicken.nei.NEIClientUtils;
+import codechicken.nei.NEIModContainer;
+import codechicken.nei.recipe.StackInfo;
+import codechicken.nei.util.ItemUntranslator;
+import codechicken.nei.util.ReadableNumberConverter;
+import codechicken.nei.util.RenderTooltipEventHelper;
+import java.awt.Point;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.StringJoiner;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import java.util.function.IntFunction;
+import java.util.stream.Collectors;
+import javax.annotation.Nullable;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.client.renderer.RenderHelper;
+import net.minecraft.client.renderer.Tessellator;
+import net.minecraft.client.renderer.entity.RenderItem;
+import net.minecraft.client.resources.IResourceManager;
+import net.minecraft.client.resources.IResourceManagerReloadListener;
+import net.minecraft.client.resources.SimpleReloadableResourceManager;
+import net.minecraft.init.Blocks;
+import net.minecraft.inventory.Slot;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.EnumChatFormatting;
+import net.minecraftforge.fluids.FluidStack;
+import org.lwjgl.input.Keyboard;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.opengl.GL11;
+
+public class GuiContainerManager {
+    public GuiContainer window;
+    public static RenderItem drawItems = new RenderItem();
+    public static final LinkedList<IContainerTooltipHandler> tooltipHandlers = new HideousLinkedList(new CopyOnWriteArrayList());
+    public static final LinkedList<IContainerInputHandler> inputHandlers = new HideousLinkedList(new CopyOnWriteArrayList());
+    public static final LinkedList<IContainerDrawHandler> drawHandlers = new HideousLinkedList(new CopyOnWriteArrayList());
+    public static final LinkedList<IContainerObjectHandler> objectHandlers = new HideousLinkedList(new CopyOnWriteArrayList());
+    public static final LinkedList<IContainerSlotClickHandler> slotClickHandlers = new HideousLinkedList(new CopyOnWriteArrayList());
+    public static final int TOOLTIP_Z_OFFSET = 400;
+    private static int modelviewDepth;
+    private static boolean contextEnabled;
+    private static final ItemStackSet renderingErrorItems;
+    private int clickHandled = 0;
+    public final List<IContainerTooltipHandler> instanceTooltipHandlers;
+    private static int tooltipPage;
+    private static int maxTooltipPage;
+
+    public static GuiContainerManager getManager() {
+        GuiScreen gui = Minecraft.getMinecraft().currentScreen;
+        return gui instanceof GuiContainer ? getManager((GuiContainer)gui) : null;
+    }
+
+    public static GuiContainerManager getManager(GuiContainer gui) {
+        return null;
+    }
+
+    public static void addTooltipHandler(IContainerTooltipHandler handler) {
+        tooltipHandlers.add(handler);
+    }
+
+    public static void addInputHandler(IContainerInputHandler handler) {
+        inputHandlers.add(handler);
+    }
+
+    public static void addDrawHandler(IContainerDrawHandler handler) {
+        drawHandlers.add(handler);
+    }
+
+    public static void addObjectHandler(IContainerObjectHandler handler) {
+        objectHandlers.add(handler);
+    }
+
+    public static void addSlotClickHandler(IContainerSlotClickHandler handler) {
+        slotClickHandlers.addFirst(handler);
+    }
+
+    public static FontRenderer getFontRenderer(ItemStack stack) {
+        if (stack != null && stack.getItem() != null) {
+            FontRenderer f = stack.getItem().getFontRenderer(stack);
+            if (f != null) {
+                return f;
+            }
+        }
+
+        return GuiDraw.fontRenderer;
+    }
+
+    public static List<String> itemDisplayNameMultiline(ItemStack stack, GuiContainer gui, boolean includeHandlers) {
+        List<String> namelist;
+        try {
+            namelist = stack.getTooltip(Minecraft.getMinecraft().thePlayer, includeHandlers && Minecraft.getMinecraft().gameSettings.advancedItemTooltips);
+        } catch (Throwable var6) {
+            namelist = new ArrayList();
+        }
+
+        if (namelist.isEmpty()) {
+            namelist.add("Unnamed");
+        } else if (namelist.get(0) == null || ((String)namelist.get(0)).isEmpty()) {
+            namelist.set(0, "Unnamed");
+        }
+
+        if (includeHandlers) {
+            for(IContainerTooltipHandler handler : tooltipHandlers) {
+                namelist = handler.handleItemDisplayName(gui, stack, namelist);
+            }
+        }
+
+        namelist.set(0, stack.getRarity().rarityColor.toString() + (String)namelist.get(0));
+
+        for(int i = 1; i < namelist.size(); ++i) {
+            if (namelist.get(i) == null) {
+                namelist.set(i, "");
+            } else if (!((String)namelist.get(i)).startsWith("§x")) {
+                namelist.set(i, EnumChatFormatting.GRAY + (String)namelist.get(i) + EnumChatFormatting.RESET);
+            }
+        }
+
+        return namelist;
+    }
+
+    @Nullable
+    public static String countDetails(int stackSize, int maxStackSize, String fullPattern, String shortPattern, IntFunction<String> valueFormatter) {
+        if (maxStackSize > 1 && stackSize > maxStackSize) {
+            int remainder = stackSize % maxStackSize;
+            int units = stackSize / maxStackSize;
+            return remainder > 0 ? String.format(fullPattern, valueFormatter.apply(stackSize), NEIClientUtils.formatNumber((long)units), valueFormatter.apply(maxStackSize), valueFormatter.apply(remainder)) : String.format(shortPattern, valueFormatter.apply(stackSize), NEIClientUtils.formatNumber((long)units), valueFormatter.apply(maxStackSize));
+        } else {
+            return null;
+        }
+    }
+
+    @Nullable
+    public static String itemCountDetails(ItemStack stack) {
+        FluidStack fluid = StackInfo.getFluid(stack);
+        return fluid != null ? fluidAmountDetails(fluid.amount * Math.max(1, stack.stackSize)) : countDetails(stack.stackSize, stack.getMaxStackSize(), NEIClientUtils.translate("inventory.tooltip.count.item", new Object[]{"%s = %s * %s + %s"}), NEIClientUtils.translate("inventory.tooltip.count.item", new Object[]{"%s = %s * %s"}), NEIClientUtils::formatNumber);
+    }
+
+    @Nullable
+    public static String fluidAmountDetails(FluidStack fluid) {
+        return fluidAmountDetails(fluid.amount);
+    }
+
+    @Nullable
+    public static String fluidAmountDetails(int amount) {
+        return countDetails(amount, 144, NEIClientUtils.translate("inventory.tooltip.count.fluid", new Object[]{"%s = %s * %s + %s"}), NEIClientUtils.translate("inventory.tooltip.count.fluid", new Object[]{"%s = %s * %s"}), NEIClientUtils::formatFluid);
+    }
+
+    public static String itemDisplayNameShort(ItemStack itemstack) {
+        try {
+            List<String> namelist = itemstack.getTooltip(Minecraft.getMinecraft().thePlayer, false);
+            if (!namelist.isEmpty() && !"".equals(namelist.get(0))) {
+                return itemstack.getRarity().rarityColor.toString() + (String)namelist.get(0) + EnumChatFormatting.RESET;
+            }
+        } catch (Throwable var2) {
+        }
+
+        return "Unnamed";
+    }
+
+    /** @deprecated */
+    @Deprecated
+    public static String concatenatedDisplayName(ItemStack itemstack, boolean includeHandlers) {
+        List<String> list = itemDisplayNameMultiline(itemstack, (GuiContainer)null, includeHandlers);
+        StringJoiner sb = new StringJoiner("#");
+
+        for(String name : list) {
+            if (!name.isEmpty()) {
+                sb.add(name);
+            }
+        }
+
+        return EnumChatFormatting.getTextWithoutFormattingCodes(sb.toString());
+    }
+
+    public static void drawItem(int offsetX, int offsetY, ItemStack itemstack) {
+        drawItem(offsetX, offsetY, itemstack, false);
+    }
+
+    public static void drawItem(int offsetX, int offsetY, ItemStack itemstack, boolean smallAmount) {
+        drawItem(offsetX, offsetY, itemstack, smallAmount, (String)null);
+    }
+
+    public static void drawItem(int offsetX, int offsetY, ItemStack itemstack, boolean smallAmount, String quantity) {
+        drawItem(offsetX, offsetY, itemstack, getFontRenderer(itemstack), smallAmount, quantity);
+    }
+
+    public static void drawItem(int offsetX, int offsetY, ItemStack itemstack, FontRenderer fontRenderer) {
+        drawItem(offsetX, offsetY, itemstack, fontRenderer, false, (String)null);
+    }
+
+    public static void drawItem(int offsetX, int offsetY, ItemStack itemstack, FontRenderer fontRenderer, boolean smallAmount, String quantity) {
+        safeItemRenderContext(itemstack, offsetX, offsetY, fontRenderer, () -> {
+            float scale = smallAmount ? 0.5F : 1.0F;
+            String stackSize = quantity;
+            if (quantity == null) {
+                if (itemstack.stackSize > 1) {
+                    if (NEIClientConfig.getBooleanSetting("inventory.dynamicFontSize")) {
+                        stackSize = ReadableNumberConverter.INSTANCE.toWideReadableForm((long)itemstack.stackSize);
+                        if (stackSize.length() == 3) {
+                            scale = 0.8F;
+                        } else if (stackSize.length() == 4) {
+                            scale = 0.6F;
+                        } else if (stackSize.length() > 4) {
+                            scale = 0.5F;
+                        }
+                    } else {
+                        stackSize = String.valueOf(itemstack.stackSize);
+                    }
+                } else {
+                    stackSize = "";
+                }
+            }
+
+            drawItems.renderItemAndEffectIntoGUI(fontRenderer, GuiDraw.renderEngine, itemstack, offsetX, offsetY);
+            if (scale != 1.0F && !stackSize.isEmpty()) {
+                drawBigStackSize(offsetX, offsetY, stackSize, scale);
+                stackSize = "";
+            }
+
+            drawItems.renderItemOverlayIntoGUI(fontRenderer, GuiDraw.renderEngine, itemstack, offsetX, offsetY, stackSize);
+        });
+    }
+
+    protected static void drawBigStackSize(int offsetX, int offsetY, String stackSize, float scale) {
+        float inverseScaleFactor = 1.0F / scale;
+        enable2DRender();
+        GL11.glScaled((double)scale, (double)scale, (double)scale);
+        int X = (int)(((float)offsetX + 16.0F - (float)GuiDraw.fontRenderer.getStringWidth(stackSize) * scale) * inverseScaleFactor);
+        int Y = (int)(((float)offsetY + 16.0F - 7.0F * scale) * inverseScaleFactor);
+        GuiDraw.fontRenderer.drawStringWithShadow(stackSize, X, Y, 16777215);
+        GL11.glScaled((double)inverseScaleFactor, (double)inverseScaleFactor, (double)inverseScaleFactor);
+        enable3DRender();
+    }
+
+    private static void safeItemRenderContext(ItemStack stack, int x, int y, FontRenderer fontRenderer, Runnable callback) {
+        RenderItem var10000 = drawItems;
+        float zLevel = var10000.zLevel += 100.0F;
+        enableMatrixStackLogging();
+        enable3DRender();
+
+        try {
+            if (renderingErrorItems.contains(stack)) {
+                drawItems.renderItemIntoGUI(fontRenderer, GuiDraw.renderEngine, new ItemStack(Blocks.fire), x, y);
+            } else {
+                callback.run();
+            }
+
+            if (!checkMatrixStack()) {
+                throw new IllegalStateException("Modelview matrix stack too deep");
+            }
+
+            if (Tessellator.instance.isDrawing) {
+                throw new IllegalStateException("Still drawing");
+            }
+        } catch (Exception e) {
+            System.err.println("Error while rendering: " + stack + " (" + e.getMessage() + ")");
+            e.printStackTrace();
+            restoreMatrixStack();
+            if (Tessellator.instance.isDrawing) {
+                Tessellator.instance.draw();
+            }
+
+            drawItems.zLevel = zLevel;
+            drawItems.renderItemIntoGUI(fontRenderer, GuiDraw.renderEngine, new ItemStack(Blocks.fire), x, y);
+            renderingErrorItems.add(stack);
+        }
+
+        enable2DRender();
+        disableMatrixStackLogging();
+        drawItems.zLevel = zLevel - 100.0F;
+    }
+
+    public static void registerReloadResourceListener() {
+        IResourceManager var1 = Minecraft.getMinecraft().getResourceManager();
+        if (var1 instanceof SimpleReloadableResourceManager) {
+            SimpleReloadableResourceManager manager = (SimpleReloadableResourceManager)var1;
+            manager.registerReloadListener(new ResourcePackReloaded());
+        }
+
+    }
+
+    public static void enableMatrixStackLogging() {
+        if (!contextEnabled) {
+            GL11.glPushAttrib(24640);
+            modelviewDepth = GL11.glGetInteger(2979);
+            contextEnabled = true;
+        }
+
+    }
+
+    public static void disableMatrixStackLogging() {
+        if (contextEnabled) {
+            contextEnabled = false;
+            modelviewDepth = -1;
+            GL11.glPopAttrib();
+        }
+
+    }
+
+    public static boolean checkMatrixStack() {
+        return modelviewDepth < 0 || GL11.glGetInteger(2979) == modelviewDepth;
+    }
+
+    public static void restoreMatrixStack() {
+        if (modelviewDepth >= 0) {
+            for(int i = GL11.glGetInteger(2979); i > modelviewDepth; --i) {
+                GL11.glPopMatrix();
+            }
+        }
+
+    }
+
+    public static void setColouredItemRender(boolean enable) {
+        drawItems.renderWithColor = !enable;
+    }
+
+    public static void enable3DRender() {
+        GL11.glEnable(2896);
+        GL11.glEnable(2929);
+    }
+
+    public static void enable2DRender() {
+        GL11.glDisable(2896);
+        GL11.glDisable(2929);
+    }
+
+    public GuiContainerManager(GuiContainer screen) {
+        this.window = screen;
+        if (screen instanceof IContainerTooltipHandler) {
+            IContainerTooltipHandler tooltipHandler = (IContainerTooltipHandler)screen;
+            this.instanceTooltipHandlers = Collections.synchronizedList(new LinkedList());
+            this.instanceTooltipHandlers.add(tooltipHandler);
+            this.instanceTooltipHandlers.addAll(tooltipHandlers);
+        } else {
+            this.instanceTooltipHandlers = tooltipHandlers;
+        }
+
+    }
+
+    public static ItemStack getStackMouseOver(GuiContainer window) {
+        Point mousePos = GuiDraw.getMousePosition();
+
+        for(IContainerObjectHandler objectHandler : objectHandlers) {
+            ItemStack item = objectHandler.getStackUnderMouse(window, mousePos.x, mousePos.y);
+            if (item != null) {
+                return item;
+            }
+        }
+
+        Slot slot = getSlotMouseOver(window);
+        if (slot != null) {
+            return slot.getStack();
+        } else {
+            return null;
+        }
+    }
+
+    public static Slot getSlotMouseOver(GuiContainer window) {
+        Point mousePos = GuiDraw.getMousePosition();
+        return getManager(window).objectUnderMouse(mousePos.x, mousePos.y) ? null : window.getSlotAtPosition(mousePos.x, mousePos.y);
+    }
+
+    public void load() {
+        this.clickHandled = 0;
+
+        for(IContainerObjectHandler objectHandler : objectHandlers) {
+            objectHandler.load(this.window);
+        }
+
+    }
+
+    public void updateScreen() {
+        for(IContainerObjectHandler objectHandler : objectHandlers) {
+            objectHandler.guiTick(this.window);
+        }
+
+    }
+
+    public boolean lastKeyTyped(int keyID, char keyChar) {
+        if (keyID == 1) {
+            return false;
+        } else {
+            for(IContainerInputHandler inputhander : inputHandlers) {
+                if (inputhander.lastKeyTyped(this.window, keyChar, keyID)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    public boolean firstKeyTyped(char keyChar, int keyID) {
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            inputhander.onKeyTyped(this.window, keyChar, keyID);
+        }
+
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            if (inputhander.keyTyped(this.window, keyChar, keyID)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public boolean mouseClicked(int mousex, int mousey, int button) {
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            inputhander.onMouseClicked(this.window, mousex, mousey, button);
+        }
+
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            if (inputhander.mouseClicked(this.window, mousex, mousey, button)) {
+                this.clickHandled |= 1 << button;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void mouseScrolled(int scrolled) {
+        Point mousepos = GuiDraw.getMousePosition();
+
+        for(IContainerInputHandler inputHandler : inputHandlers) {
+            inputHandler.onMouseScrolled(this.window, mousepos.x, mousepos.y, scrolled);
+        }
+
+        for(IContainerInputHandler inputHandler : inputHandlers) {
+            if (inputHandler.mouseScrolled(this.window, mousepos.x, mousepos.y, scrolled)) {
+                return;
+            }
+        }
+
+        if (this.window instanceof IGuiHandleMouseWheel) {
+            ((IGuiHandleMouseWheel)this.window).mouseScrolled(scrolled);
+        }
+
+    }
+
+    public boolean overrideMouseUp(int mousex, int mousey, int button) {
+        if (button >= 0 && (this.clickHandled & 1 << button) != 0) {
+            this.clickHandled &= ~(1 << button);
+            this.mouseUp(mousex, mousey, button);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public void mouseUp(int mousex, int mousey, int button) {
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            inputhander.onMouseUp(this.window, mousex, mousey, button);
+        }
+
+    }
+
+    public void mouseDragged(int mousex, int mousey, int button, long heldTime) {
+        for(IContainerInputHandler inputhander : inputHandlers) {
+            inputhander.onMouseDragged(this.window, mousex, mousey, button, heldTime);
+        }
+
+    }
+
+    public void preDraw() {
+        for(IContainerDrawHandler drawHandler : drawHandlers) {
+            drawHandler.onPreDraw(this.window);
+        }
+
+    }
+
+    public void renderObjects(int mousex, int mousey) {
+        GL11.glTranslatef((float)(-this.window.guiLeft), (float)(-this.window.guiTop), 200.0F);
+
+        for(IContainerDrawHandler drawHandler : drawHandlers) {
+            drawHandler.renderObjects(this.window, mousex, mousey);
+        }
+
+        for(IContainerDrawHandler drawHandler : drawHandlers) {
+            drawHandler.postRenderObjects(this.window, mousex, mousey);
+        }
+
+        GL11.glTranslatef((float)this.window.guiLeft, (float)this.window.guiTop, -200.0F);
+    }
+
+    public void renderToolTips(int mousex, int mousey) {
+        List<String> tooltip = new LinkedList();
+        FontRenderer font = GuiDraw.fontRenderer;
+        synchronized(this.instanceTooltipHandlers) {
+            for(IContainerTooltipHandler handler : this.instanceTooltipHandlers) {
+                tooltip = handler.handleTooltip(this.window, mousex, mousey, tooltip);
+            }
+        }
+
+        ItemStack stack = getStackMouseOver(this.window);
+        boolean showTooltip = shouldShowTooltip(this.window);
+        if (tooltip.isEmpty() && showTooltip) {
+            font = getFontRenderer(stack);
+            if (stack != null) {
+                tooltip = itemDisplayNameMultiline(stack, this.window, true);
+                applyItemCountDetails(tooltip, stack);
+            }
+
+            synchronized(this.instanceTooltipHandlers) {
+                for(IContainerTooltipHandler handler : this.instanceTooltipHandlers) {
+                    tooltip = handler.handleItemTooltip(this.window, stack, mousex, mousey, tooltip);
+                }
+            }
+        }
+
+        if (showTooltip && NEIClientConfig.getBooleanSetting("inventory.showHotkeys")) {
+            List<String> hotkeystips = this.collectHotkeyTips(mousex, mousey);
+            if (!hotkeystips.isEmpty()) {
+                if (tooltip.isEmpty()) {
+                    tooltip.addAll(hotkeystips);
+                } else {
+                    tooltip.addAll(1, hotkeystips);
+                }
+            }
+        }
+
+        if (showTooltip && stack != null && !tooltip.isEmpty()) {
+            String secondDisplayName = ItemUntranslator.getInstance().getItemStackDisplayName(stack);
+            if (!secondDisplayName.isEmpty()) {
+                tooltip.add(1, EnumChatFormatting.DARK_GRAY + secondDisplayName + "§h");
+            } else {
+                tooltip.set(0, (String)tooltip.get(0) + "§h");
+            }
+        } else if (!tooltip.isEmpty()) {
+            tooltip.set(0, (String)tooltip.get(0) + "§h");
+        }
+
+        if (NEIModContainer.isGTNHLibLoaded() && !tooltip.isEmpty()) {
+            if (RenderTooltipEventHelper.post(stack, this.window, mousex, mousey, font)) {
+                return;
+            }
+
+            Consumer<List<String>> alternativeRenderer = RenderTooltipEventHelper.getAlternativeRenderer();
+            if (alternativeRenderer == null) {
+                drawPagedTooltip(RenderTooltipEventHelper.getFont(), RenderTooltipEventHelper.getX() + 12, RenderTooltipEventHelper.getY() - 12, tooltip);
+            } else {
+                GL11.glDisable(32826);
+                RenderHelper.disableStandardItemLighting();
+                GL11.glDisable(2929);
+                GuiDraw.gui.incZLevel(300.0F);
+                alternativeRenderer.accept(tooltip);
+                GuiDraw.gui.incZLevel(-300.0F);
+                GL11.glEnable(2929);
+                RenderHelper.enableStandardItemLighting();
+                GL11.glEnable(32826);
+            }
+
+            RenderTooltipEventHelper.flush();
+        } else {
+            drawPagedTooltip(font, mousex + 12, mousey - 12, tooltip);
+        }
+
+    }
+
+    private List<String> collectHotkeyTips(int mousex, int mousey) {
+        if (NEIClientUtils.altKey()) {
+            Map<String, String> hotkeys = new HashMap();
+            synchronized(this.instanceTooltipHandlers) {
+                for(IContainerTooltipHandler handler : this.instanceTooltipHandlers) {
+                    hotkeys = handler.handleHotkeys(this.window, mousex, mousey, hotkeys);
+                }
+            }
+
+            hotkeys.remove((Object)null);
+            hotkeys.remove("");
+            if (!hotkeys.isEmpty()) {
+                List<String> hotkeystips = new ArrayList();
+                Map<String, List<String>> messages = new HashMap();
+
+                for(Map.Entry<String, String> entry : hotkeys.entrySet()) {
+                    ((List)messages.computeIfAbsent((String)entry.getValue(), (m) -> new ArrayList())).add((String)entry.getKey());
+                }
+
+                for(List<String> keys : messages.values()) {
+                    Collections.sort(keys, (a, b) -> a.length() != b.length() ? Integer.compare(a.length(), b.length()) : a.compareTo(b));
+                }
+
+                messages.entrySet().stream().sorted((a, b) -> {
+                    String sa = String.join("/", (Iterable)a.getValue());
+                    String sb = String.join("/", (Iterable)b.getValue());
+                    return sa.length() != sb.length() ? Integer.compare(sa.length(), sb.length()) : sa.compareTo(sb);
+                }).map((entryx) -> this.getHotkeyTip((List)entryx.getValue(), (String)entryx.getKey())).collect(Collectors.toCollection(() -> hotkeystips));
+                hotkeystips.set(hotkeystips.size() - 1, (String)hotkeystips.get(hotkeystips.size() - 1) + "§h");
+                return hotkeystips;
+            }
+        } else if (NEIClientConfig.getBooleanSetting("inventory.hotkeysHelpText")) {
+            Map<String, String> hotkeys = new HashMap();
+            boolean existsHotkeys = false;
+            synchronized(this.instanceTooltipHandlers) {
+                for(IContainerTooltipHandler handler : this.instanceTooltipHandlers) {
+                    if (!(hotkeys = handler.handleHotkeys(this.window, mousex, mousey, hotkeys)).isEmpty()) {
+                        hotkeys.remove("");
+                        hotkeys.remove((Object)null);
+                        if (!hotkeys.isEmpty()) {
+                            existsHotkeys = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (existsHotkeys) {
+                return Collections.singletonList(EnumChatFormatting.GRAY + NEIClientUtils.translate("showHotkeys", new Object[]{EnumChatFormatting.GOLD + NEIClientUtils.translate("key.alt", new Object[0]) + EnumChatFormatting.GRAY}));
+            }
+        }
+
+        return Collections.emptyList();
+    }
+
+    private String getHotkeyTip(List<String> keys, String message) {
+        return EnumChatFormatting.GOLD + String.join(EnumChatFormatting.DARK_GRAY + " / " + EnumChatFormatting.GOLD, keys) + EnumChatFormatting.DARK_GRAY + " - " + EnumChatFormatting.GRAY + message + EnumChatFormatting.RESET;
+    }
+
+    public static void drawPagedTooltip(FontRenderer font, int x, int y, List<String> list) {
+        if (!list.isEmpty()) {
+            List<List<String>> tooltips = splitTooltipByPage(list);
+            maxTooltipPage = tooltips.size();
+            tooltipPage = tooltipPage < maxTooltipPage ? tooltipPage : 0;
+            List<String> currentTooltip = (List)tooltips.get(tooltipPage);
+            if (maxTooltipPage > 1) {
+                String lastLine = (String)currentTooltip.remove(currentTooltip.size() - 1);
+                String pageTooltip = EnumChatFormatting.ITALIC + NEIClientUtils.translate("inventory.tooltip.page", new Object[]{tooltipPage + 1, maxTooltipPage, NEIClientConfig.getKeyName("gui.next_tooltip")});
+                if (lastLine.startsWith("§x")) {
+                    currentTooltip.add(lastLine);
+                } else {
+                    currentTooltip.add(lastLine + "§h");
+                }
+
+                currentTooltip.add(pageTooltip);
+            }
+
+            if (NEIModContainer.isGTNHLibLoaded()) {
+                GuiDraw.drawMultilineTip(font, x, y, currentTooltip, RenderTooltipEventHelper.getBackgroundStart(), RenderTooltipEventHelper.getBackgroundEnd(), RenderTooltipEventHelper.getBorderStart(), RenderTooltipEventHelper.getBorderEnd());
+            } else {
+                GuiDraw.drawMultilineTip(font, x, y, currentTooltip);
+            }
+
+        }
+    }
+
+    public static List<List<String>> splitTooltipByPage(List<String> list) {
+        List<List<String>> ret = new ArrayList();
+        List<String> tmp = new ArrayList();
+        int height = -2;
+
+        for(int i = 0; i < list.size(); ++i) {
+            String text = (String)list.get(i);
+            GuiDraw.ITooltipLineHandler line = GuiDraw.getTipLine(text);
+            int lineHeight = line != null ? line.getSize().height : (text.endsWith("§h") && i + 1 < list.size() ? 12 : 10);
+            if (height + lineHeight > GuiDraw.displaySize().height - 16 - 10 && !tmp.isEmpty()) {
+                ret.add(new ArrayList(tmp));
+                tmp.clear();
+                height = -2;
+            } else {
+                height += lineHeight;
+            }
+
+            tmp.add(text);
+        }
+
+        if (!tmp.isEmpty()) {
+            ret.add(tmp);
+        }
+
+        return ret;
+    }
+
+    public static boolean shouldShowTooltip(GuiContainer window) {
+        if (window == null) {
+            return false;
+        } else {
+            for(IContainerObjectHandler handler : objectHandlers) {
+                if (!handler.shouldShowTooltip(window)) {
+                    return false;
+                }
+            }
+
+            return window.mc.thePlayer.inventory.getItemStack() == null;
+        }
+    }
+
+    public static void applyItemCountDetails(List<String> tooltip, ItemStack stack) {
+        if (stack.stackSize != Integer.MAX_VALUE && NEIClientUtils.shiftKey()) {
+            String itemCount = itemCountDetails(stack);
+            if (itemCount != null) {
+                tooltip.add(String.format(EnumChatFormatting.GRAY + itemCount + EnumChatFormatting.RESET));
+            }
+        }
+
+    }
+
+    public static boolean incrementTooltipPage() {
+        return tooltipPage != Math.min(tooltipPage++, maxTooltipPage);
+    }
+
+    public void renderSlotUnderlay(Slot slot) {
+        for(IContainerDrawHandler drawHandler : drawHandlers) {
+            drawHandler.renderSlotUnderlay(this.window, slot);
+        }
+
+    }
+
+    public void renderSlotOverlay(Slot slot) {
+        for(IContainerDrawHandler drawHandler : drawHandlers) {
+            drawHandler.renderSlotOverlay(this.window, slot);
+        }
+
+        GL11.glEnable(3008);
+    }
+
+    public boolean objectUnderMouse(int mousex, int mousey) {
+        for(IContainerObjectHandler objectHandler : objectHandlers) {
+            if (objectHandler.objectUnderMouse(this.window, mousex, mousey)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void handleMouseClick(Slot slot, int slotIndex, int button, int modifier) {
+        for(IContainerSlotClickHandler handler : slotClickHandlers) {
+            handler.beforeSlotClick(this.window, slotIndex, button, slot, modifier);
+        }
+
+        boolean eventHandled = false;
+
+        for(IContainerSlotClickHandler handler : slotClickHandlers) {
+            eventHandled = handler.handleSlotClick(this.window, slotIndex, button, slot, modifier, eventHandled);
+        }
+
+        for(IContainerSlotClickHandler handler : slotClickHandlers) {
+            handler.afterSlotClick(this.window, slotIndex, button, slot, modifier);
+        }
+
+    }
+
+    public void handleKeyboardInput() {
+        int k = Keyboard.getEventKey();
+        char c = Keyboard.getEventCharacter();
+        if (Keyboard.getEventKeyState() || k == 0 && Character.isDefined(c)) {
+            try {
+                this.keyTyped(c, k);
+            } catch (IndexOutOfBoundsException e) {
+                System.err.println("Caught out of bounds exception pressing " + c + " " + k);
+                e.printStackTrace();
+            }
+        }
+
+        this.window.mc.func_152348_aa();
+    }
+
+    public void keyTyped(char c, int k) {
+        if (!this.firstKeyTyped(c, k)) {
+            callKeyTyped(this.window, c, k);
+        }
+    }
+
+    private static void callKeyTyped(GuiContainer window, char c, int k) {
+    }
+
+    public void drawSlotItem(Slot slot, ItemStack stack, int x, int y, String quantity) {
+        if (this.window instanceof IGuiSlotDraw) {
+            safeItemRenderContext(stack, x, y, GuiDraw.fontRenderer, () -> ((IGuiSlotDraw)this.window).drawSlotItem(slot, stack, x, y, quantity));
+        } else if (stack != null) {
+            drawItem(x, y, stack, false, quantity);
+        }
+
+    }
+
+    public void handleSlotClick(int slotIndex, int button, int modifiers) {
+        if (slotIndex != -1) {
+            if (this.window instanceof IGuiClientSide) {
+                this.window.mc.thePlayer.openContainer.slotClick(slotIndex, button, modifiers, this.window.mc.thePlayer);
+            } else {
+                this.window.mc.playerController.windowClick(this.window.inventorySlots.windowId, slotIndex, button, modifiers, this.window.mc.thePlayer);
+            }
+
+        }
+    }
+
+    public void handleMouseWheel() {
+        int i = Mouse.getEventDWheel();
+        if (i != 0) {
+            this.mouseScrolled(i > 0 ? 1 : -1);
+        }
+
+    }
+
+    static {
+        addSlotClickHandler(new DefaultSlotClickHandler());
+        modelviewDepth = -1;
+        contextEnabled = false;
+        renderingErrorItems = new ItemStackSet();
+    }
+
+    private static class ResourcePackReloaded implements IResourceManagerReloadListener {
+        private ResourcePackReloaded() {
+        }
+
+        public void onResourceManagerReload(IResourceManager p_110549_1_) {
+            GuiContainerManager.renderingErrorItems.clear();
+            ItemList.loadItems.restart();
+            if (NEIClientConfig.enableItemUntranslator()) {
+                ItemUntranslator.getInstance().load();
+            }
+
+        }
+    }
+}
