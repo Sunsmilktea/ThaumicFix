@@ -1,6 +1,6 @@
 Manifest-Version: 1.0
 FMLCorePluginContainsFMLMod: true
 TweakClass: org.spongepowered.asm.launch.MixinTweaker
-MixinConfigs: mixins.thaumicmixins.json
+MixinConfigs: mixins.thaumicfix.json
 ForceLoadAsMod: true
 

@@ -8,7 +8,10 @@
   "mixins": [
     "MixinEntityPech",
     "MixinThaumcraftCraftingManager",
-    "MixinItemCellMicroscope"
+    "MixinItemCellMicroscope",
+    "MixinBaublesEventHandlerNetwork",
+    "MixinChunkProviderServer",
+    "MixinWorldGenBounds"
   ],
-  "priority": 1500
+  "priority": 15000
 }

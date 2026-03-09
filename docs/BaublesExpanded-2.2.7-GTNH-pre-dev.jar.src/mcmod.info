@@ -1,0 +1,21 @@
+{
+	"modListVersion": 2,
+	"modList": [{
+		"modid": "Baubles|Expanded",
+		"name": "Baubles Expanded",
+		"description": "Adding a touch of bling to Minecraft",
+		"version": "2.2.7-GTNH-pre",
+		"mcversion": "1.7.10",
+		"url": "https://github.com/jss2a98aj/Baubles-Expanded",
+		"updateUrl": "",
+		"authorList": ["Azanor", "jss2a98aj"],
+		"credits": "Special thanks to chicken_bones",
+		"logoFile": "BLogo.png",
+		"screenshots": [],
+		"parent": "",
+		"requiredMods": [],
+		"dependencies": [],
+		"dependants": [],
+		"useDependencyInformation": false
+	}]
+}

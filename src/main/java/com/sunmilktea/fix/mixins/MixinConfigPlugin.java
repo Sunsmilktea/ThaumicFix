@@ -22,6 +22,7 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+
         if (mixinClassName.equals("com.sunmilktea.fix.mixins.MixinThaumcraftCraftingManager")) {
             return Config.fixThaumcraftCraftingManagerNPE;
         }
@@ -32,6 +33,12 @@ public class MixinConfigPlugin implements IMixinConfigPlugin {
         if ("com.sunmilktea.fix.mixins.MixinNEIRendering".equals(mixinClassName)) {
             return Config.fixNEIRenderingCrash && MixinEnvironment.getCurrentEnvironment()
                 .getSide() == MixinEnvironment.Side.CLIENT;
+        }
+        if ("com.sunmilktea.fix.mixins.MixinChunkProviderServer".equals(mixinClassName)) {
+            return Config.fixChunkLoadSaveCrash;
+        }
+        if ("com.sunmilktea.fix.mixins.MixinWorldGenBounds".equals(mixinClassName)) {
+            return Config.fixWorldGenBounds;
         }
         return true;
     }
